@@ -1,0 +1,70 @@
+### Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+dist/
+site/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+### Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+### Environment and secrets
+.env
+.env.*
+!.env.example
+
+### Testing and tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.cache/
+
+### Jupyter
+.ipynb_checkpoints/
+
+### IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+### Logs
+*.log
+logs/
+
+### OS files
+.DS_Store
+Thumbs.db
+
+### AI / ML artifacts
+checkpoints/
+checkpoint/
+weights/
+models/
+artifacts/
+outputs/
+runs/
+mlruns/
+wandb/
+
+### Data (uncomment if generated data should be ignored)
+# data/
+# datasets/
+
+### Temporary files
+tmp/
+temp/
