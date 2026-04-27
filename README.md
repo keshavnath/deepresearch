@@ -8,7 +8,7 @@ A production-ready multi-agent system that autonomously researches queries by de
 
 ```
 User Query → Orchestrator (decompose) → Searcher → Scraper → Synthesizer → Critic → Reporter
-                                           ↑_____________________________________↓
+                                           ↑__________________________________↓
                                            (iterate if gaps found, max 2 loops)
 ```
 
@@ -76,20 +76,3 @@ tests/
 ├── unit/            # Structured I/O, rate limiter tests
 └── integration/     # API endpoint tests
 ```
-
-## Environment Setup
-
-Required in `.env`:
-```
-MODEL_NAME=meta-llama/Llama-3.1-8B-Instruct:novita
-MODEL_URL=https://router.huggingface.co/v1
-MODEL_API_KEY=hf_...
-
-TAVILY_API_KEY=tvly-...
-
-WANDB_ENABLED=True
-WANDB_PROJECT=deepresearch
-WANDB_API_KEY=wandb_v1_...
-```
-
-All configured in your `.env` already.
