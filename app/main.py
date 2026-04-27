@@ -27,18 +27,9 @@ async def event_generator(request: ResearchRequest) -> AsyncGenerator[str, None]
         "report": None
     }
     
-    # Configure the graph with the model settings in a side-channel/config
-    config = {
-        "configurable": {
-            "model_name": request.model_name,
-            "base_url": request.base_url,
-            "api_key": request.api_key
-        }
-    }
-    
     try:
         # Using astream_events v2 for granular node/tool updates
-        async for event in graph.astream_events(initial_state, config, version="v2"):
+        async for event in graph.astream_events(initial_state, version="v2"):
             kind = event["event"]
             if kind == "on_chain_end":
                 # We can filter for specific node completions to provide clean UI updates

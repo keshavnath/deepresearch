@@ -3,6 +3,7 @@ from typing import Optional, Type, Any
 from langchain_openai import ChatOpenAI
 from app.config import MODEL_NAME, MODEL_URL, MODEL_API_KEY
 from langchain_core.output_parsers.pydantic import PydanticOutputParser
+from app.utils.rate_limiter import rate_limit_llm
 
 
 class LLMWrapper:
@@ -25,6 +26,8 @@ class LLMWrapper:
     async def ainvoke(self, prompt: str, schema: Optional[Type[Any]] = None):
         """Invoke the LLM with an optional schema for structured output.
         
+        All calls are rate-limited to prevent overwhelming the API.
+        
         Args:
             prompt: The input prompt for the LLM
             schema: Optional Pydantic model class for structured output.
@@ -35,7 +38,7 @@ class LLMWrapper:
         """
         if schema is None:
             # Plain text mode: invoke and return content
-            resp = await self._llm.ainvoke(prompt)
+            resp = await rate_limit_llm(self._llm.ainvoke(prompt))
             text = getattr(resp, "content", None)
             if text is None and hasattr(resp, "generations"):
                 gens = resp.generations
@@ -56,7 +59,7 @@ class LLMWrapper:
         if fmt:
             full_prompt = f"{prompt}\n\n{fmt}"
 
-        resp = await self._llm.ainvoke(full_prompt)
+        resp = await rate_limit_llm(self._llm.ainvoke(full_prompt))
         
         # Extract text content from common response shapes
         text = getattr(resp, "content", None)

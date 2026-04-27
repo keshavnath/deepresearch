@@ -25,3 +25,5 @@ WANDB_API_KEY = config.get("WANDB_API_KEY")
 APP_NAME = "Deep Research Multi-Agent System"
 DEBUG = config.get("DEBUG", "False").lower() == "true"
 MAX_ITERATIONS = int(config.get("MAX_ITERATIONS", 2))
+TAVILY_MAX_PARALLEL = int(config.get("TAVILY_MAX_PARALLEL", 3))
+LLM_MAX_PARALLEL = int(config.get("LLM_MAX_PARALLEL", 5))

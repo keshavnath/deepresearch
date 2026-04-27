@@ -36,7 +36,7 @@ async def report_node(state: ResearchState) -> dict:
     sources = list(set([url for f in state["findings"] for url in f.source_urls]))
     
     return {
-        "report": report.content,
+        "report": report,
         "sources": sources,
         "events": ["Report: Final report generated."]
     }

@@ -2,7 +2,8 @@ import pytest
 from pydantic import BaseModel
 from typing import Literal
 from app.utils.llm import LLMWrapper, get_llm
-from app.config import MODEL_API_KEY
+from app.config import MODEL_API_KEY, TAVILY_MAX_PARALLEL, LLM_MAX_PARALLEL
+from app.utils.rate_limiter import TAVILY_SEMAPHORE, LLM_SEMAPHORE
 
 
 class Person(BaseModel):
@@ -51,3 +52,10 @@ async def test_llm_person_parse_real():
     assert isinstance(result.name, str)
     assert isinstance(result.age, int)
     assert result.sex in ("male", "female", "other")
+
+
+@pytest.mark.asyncio
+async def test_rate_limiting_semaphores_initialized():
+    """Verify rate limiting semaphores are properly initialized."""
+    assert TAVILY_SEMAPHORE._value == TAVILY_MAX_PARALLEL, "Tavily semaphore should allow X concurrent calls"
+    assert LLM_SEMAPHORE._value == LLM_MAX_PARALLEL, "LLM semaphore should allow X concurrent calls"

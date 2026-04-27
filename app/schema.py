@@ -54,6 +54,3 @@ class ResearchState(TypedDict):
 
 class ResearchRequest(BaseModel):
     query: str
-    model_name: Optional[str] = None
-    base_url: Optional[str] = None
-    api_key: Optional[str] = None

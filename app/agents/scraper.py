@@ -3,20 +3,22 @@ import trafilatura
 from app.schema import ResearchState, ScrapedPage
 from app.utils.tracer import weave_op
 
-async def fetch_and_clean(url: str) -> ScrapedPage:
+async def fetch_and_clean(url: str) -> ScrapedPage | None:
+    """Fetch and extract content from a URL. Returns None if fetch/extract fails."""
     try:
         # Run in executor if trafilatura is synchronous
         downloaded = await asyncio.to_thread(trafilatura.fetch_url, url)
         if not downloaded:
-            raise ValueError("Empty download")
+            return None
         
         content = await asyncio.to_thread(trafilatura.extract, downloaded)
         if not content:
-            raise ValueError("No text extracted")
+            return None
             
         return ScrapedPage(url=url, content=content)
     except Exception as e:
-        return e
+        # Log error silently, return None so pipeline can skip this URL
+        return None
 
 @weave_op("scraper")
 async def scrape_node(state: ResearchState) -> dict:
@@ -35,7 +37,8 @@ async def scrape_node(state: ResearchState) -> dict:
     tasks = [fetch_and_clean(url) for url in new_urls]
     results = await asyncio.gather(*tasks)
     
-    valid_pages = [p for p in results if isinstance(p, ScrapedPage)]
+    # Filter out None values (failed fetches)
+    valid_pages = [p for p in results if p is not None]
     
     return {
         "scraped_pages": valid_pages,

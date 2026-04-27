@@ -2,14 +2,24 @@ import asyncio
 from app.schema import ResearchState, SearchResult
 from app.config import TAVILY_API_KEY
 from app.utils.tracer import weave_op
+from app.utils.rate_limiter import rate_limit_tavily
 from tavily import TavilyClient
 
 def get_tavily_client():
     return TavilyClient(api_key=TAVILY_API_KEY)
 
 async def search_one(query: str, client: TavilyClient) -> list[SearchResult]:
-    # Use advanced search for better quality
-    search_result = client.search(query, search_depth="advanced", max_results=5)
+    """Execute a single search with rate limiting."""
+    # Run synchronous search in executor with rate limit
+    async def _search():
+        return await asyncio.to_thread(
+            client.search, 
+            query, 
+            search_depth="advanced", 
+            max_results=5
+        )
+    
+    search_result = await rate_limit_tavily(_search())
     
     results = []
     for r in search_result.get("results", []):
