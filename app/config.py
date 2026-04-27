@@ -16,6 +16,11 @@ MODEL_API_KEY = config.get("MODEL_API_KEY", config.get("OPENAI_API_KEY"))
 # Search & Tools Configuration
 TAVILY_API_KEY = config.get("TAVILY_API_KEY")
 
+# WandB Tracing & Observability
+WANDB_ENABLED = config.get("WANDB_ENABLED", "True").lower() == "true"
+WANDB_PROJECT = config.get("WANDB_PROJECT", "deepresearch")
+WANDB_API_KEY = config.get("WANDB_API_KEY")
+
 # App Configuration
 APP_NAME = "Deep Research Multi-Agent System"
 DEBUG = config.get("DEBUG", "False").lower() == "true"

@@ -2,6 +2,7 @@ from typing import List
 from pydantic import BaseModel, Field
 from app.schema import ResearchState
 from app.utils.llm import get_llm
+from app.utils.tracer import get_tracer
 
 class OrchestratorOutput(BaseModel):
     sub_questions: List[str] = Field(description="3-5 sub-questions to research")
@@ -18,13 +19,23 @@ Respond with structured output.
 """
 
 async def orchestrator_node(state: ResearchState) -> dict:
-    llm = get_llm()
+    tracer = get_tracer()
+    tracer.log_agent_start("orchestrator", input_state={"query": state["query"]})
     
-    result = await llm.ainvoke(ORCHESTRATE_PROMPT.format(query=state["query"]), schema=OrchestratorOutput)
-    
-    return {
-        "sub_questions": result.sub_questions,
-        "research_plan": result.plan,
-        "iteration": state.get("iteration", 0),
-        "events": ["Orchestrator: Decomposed query into sub-questions."]
-    }
+    try:
+        llm = get_llm()
+        
+        result = await llm.ainvoke(ORCHESTRATE_PROMPT.format(query=state["query"]), schema=OrchestratorOutput)
+        
+        output = {
+            "sub_questions": result.sub_questions,
+            "research_plan": result.plan,
+            "iteration": state.get("iteration", 0),
+            "events": ["Orchestrator: Decomposed query into sub-questions."]
+        }
+        
+        tracer.log_agent_end("orchestrator", output=output)
+        return output
+    except Exception as e:
+        tracer.log_agent_end("orchestrator", error=str(e))
+        raise

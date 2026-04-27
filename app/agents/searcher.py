@@ -1,6 +1,7 @@
 import asyncio
 from app.schema import ResearchState, SearchResult
 from app.config import TAVILY_API_KEY
+from app.utils.tracer import get_tracer
 from tavily import TavilyClient
 
 def get_tavily_client():
@@ -21,22 +22,32 @@ async def search_one(query: str, client: TavilyClient) -> list[SearchResult]:
     return results
 
 async def search_node(state: ResearchState) -> dict:
-    client = get_tavily_client()
+    tracer = get_tracer()
+    tracer.log_agent_start("searcher", input_state={"num_sub_questions": len(state["sub_questions"])})
     
-    # Execute searches in parallel
-    tasks = [search_one(q, client) for q in state["sub_questions"]]
-    results_batches = await asyncio.gather(*tasks)
-    
-    # Flatten and deduplicate by URL
-    seen_urls = set()
-    new_results = []
-    for batch in results_batches:
-        for r in batch:
-            if r.url not in seen_urls:
-                seen_urls.add(r.url)
-                new_results.append(r)
-    
-    return {
-        "search_results": new_results,
-        "events": [f"Search: Found {len(new_results)} relevant sources."]
-    }
+    try:
+        client = get_tavily_client()
+        
+        # Execute searches in parallel
+        tasks = [search_one(q, client) for q in state["sub_questions"]]
+        results_batches = await asyncio.gather(*tasks)
+        
+        # Flatten and deduplicate by URL
+        seen_urls = set()
+        new_results = []
+        for batch in results_batches:
+            for r in batch:
+                if r.url not in seen_urls:
+                    seen_urls.add(r.url)
+                    new_results.append(r)
+        
+        output = {
+            "search_results": new_results,
+            "events": [f"Search: Found {len(new_results)} relevant sources."]
+        }
+        
+        tracer.log_agent_end("searcher", output=output)
+        return output
+    except Exception as e:
+        tracer.log_agent_end("searcher", error=str(e))
+        raise
