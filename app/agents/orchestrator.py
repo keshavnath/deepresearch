@@ -18,9 +18,9 @@ Respond with structured output.
 """
 
 async def orchestrator_node(state: ResearchState) -> dict:
-    llm = get_llm(schema=OrchestratorOutput)
+    llm = get_llm()
     
-    result = await llm.ainvoke(ORCHESTRATE_PROMPT.format(query=state["query"]))
+    result = await llm.ainvoke(ORCHESTRATE_PROMPT.format(query=state["query"]), schema=OrchestratorOutput)
     
     return {
         "sub_questions": result.sub_questions,

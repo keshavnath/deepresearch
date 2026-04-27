@@ -13,14 +13,14 @@ Findings so far:
 """
 
 async def critic_node(state: ResearchState) -> dict:
-    llm = get_llm(schema=CritiqueResult)
+    llm = get_llm()
     
     findings_str = "\n".join([f"Q: {f.question}\nA: {f.answer}" for f in state["findings"]])
     
     critique = await llm.ainvoke(CRITIC_PROMPT.format(
         query=state["query"],
         findings=findings_str
-    ))
+    ), schema=CritiqueResult)
     
     iteration = state.get("iteration", 0)
     updates = {

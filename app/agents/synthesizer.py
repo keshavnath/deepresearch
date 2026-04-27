@@ -14,8 +14,8 @@ Respond with a clear answer, a confidence score (0-1), and the source URLs used.
 """
 
 async def synthesize_one(question: str, context: str) -> Finding:
-    llm = get_llm(schema=Finding)
-    result = await llm.ainvoke(SYNTHESIZE_PROMPT.format(question=question, context=context))
+    llm = get_llm()
+    result = await llm.ainvoke(SYNTHESIZE_PROMPT.format(question=question, context=context), schema=Finding)
     return result
 
 async def synthesizer_node(state: ResearchState) -> dict:
