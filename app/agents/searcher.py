@@ -1,28 +1,42 @@
-from tavily import TavilyClient
-from app.schema import ResearchState
+import asyncio
+from app.schema import ResearchState, SearchResult
 from app.config import TAVILY_API_KEY
+from tavily import TavilyClient
 
 def get_tavily_client():
     return TavilyClient(api_key=TAVILY_API_KEY)
 
-async def searcher_node(state: ResearchState):
-    """
-    Worker node that executes searches using Tavily.
-    """
-    query = state.get("instructions")
-    if not query:
-        return {"next_node": "orchestrator", "history": ["Searcher skipped: No query provided"]}
-    
-    client = get_tavily_client()
-    # Using advanced search for deep research
+async def search_one(query: str, client: TavilyClient) -> list[SearchResult]:
+    # Use advanced search for better quality
     search_result = client.search(query, search_depth="advanced", max_results=5)
     
-    # Extract URLs for the scraper
-    urls = [r["url"] for r in search_result.get("results", [])]
-    summary = "\n".join([f"- {r['title']}: {r['url']}" for r in search_result.get("results", [])])
+    results = []
+    for r in search_result.get("results", []):
+        results.append(SearchResult(
+            url=r["url"],
+            title=r["title"],
+            content=r.get("content", ""),
+            score=r.get("score", 0.0)
+        ))
+    return results
+
+async def search_node(state: ResearchState) -> dict:
+    client = get_tavily_client()
+    
+    # Execute searches in parallel
+    tasks = [search_one(q, client) for q in state["sub_questions"]]
+    results_batches = await asyncio.gather(*tasks)
+    
+    # Flatten and deduplicate by URL
+    seen_urls = set()
+    new_results = []
+    for batch in results_batches:
+        for r in batch:
+            if r.url not in seen_urls:
+                seen_urls.add(r.url)
+                new_results.append(r)
     
     return {
-        "next_node": "orchestrator",
-        "history": [f"Searcher found {len(urls)} results for: {query}\n{summary}"],
-        "context": [summary] # We'll append titles/urls to context for now
+        "search_results": new_results,
+        "events": [f"Search: Found {len(new_results)} relevant sources."]
     }

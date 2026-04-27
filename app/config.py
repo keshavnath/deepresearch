@@ -19,3 +19,4 @@ TAVILY_API_KEY = config.get("TAVILY_API_KEY")
 # App Configuration
 APP_NAME = "Deep Research Multi-Agent System"
 DEBUG = config.get("DEBUG", "False").lower() == "true"
+MAX_ITERATIONS = int(config.get("MAX_ITERATIONS", 2))

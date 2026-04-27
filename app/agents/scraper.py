@@ -1,26 +1,41 @@
+import asyncio
 import trafilatura
-from app.schema import ResearchState
+from app.schema import ResearchState, ScrapedPage
 
-async def scraper_node(state: ResearchState):
-    """
-    Worker node that scrapes content from URLs found in context.
-    """
-    # In a real scenario, the orchestrator might pass specific URLs in 'instructions'
-    # or we look at the last history entry for URLs.
-    # For now, let's assume 'instructions' contains a URL or the searcher just ran.
+async def fetch_and_clean(url: str) -> ScrapedPage:
+    try:
+        # Run in executor if trafilatura is synchronous
+        downloaded = await asyncio.to_thread(trafilatura.fetch_url, url)
+        if not downloaded:
+            raise ValueError("Empty download")
+        
+        content = await asyncio.to_thread(trafilatura.extract, downloaded)
+        if not content:
+            raise ValueError("No text extracted")
+            
+        return ScrapedPage(url=url, content=content)
+    except Exception as e:
+        return e
+
+async def scrape_node(state: ResearchState) -> dict:
+    # Only scrape URLs not already fetched
+    existing_urls = {p.url for p in state.get("scraped_pages", [])}
     
-    url = state.get("instructions")
-    if not url or not url.startswith("http"):
-        return {"next_node": "orchestrator", "history": ["Scraper found no valid URL to scrape"]}
+    # Priority search results (sorted by score if available)
+    sorted_results = sorted(state["search_results"], key=lambda x: x.score, reverse=True)
     
-    downloaded = trafilatura.fetch_url(url)
-    content = trafilatura.extract(downloaded)
+    new_urls = [r.url for r in sorted_results 
+                if r.url not in existing_urls][:10]  # cap at 10
     
-    if not content:
-        return {"next_node": "orchestrator", "history": [f"Scraper failed to extract content from {url}"]}
+    if not new_urls:
+        return {"events": ["Scrape: No new URLs to fetch."]}
+
+    tasks = [fetch_and_clean(url) for url in new_urls]
+    results = await asyncio.gather(*tasks)
+    
+    valid_pages = [p for p in results if isinstance(p, ScrapedPage)]
     
     return {
-        "next_node": "orchestrator",
-        "context": [f"Source: {url}\nContent: {content[:2000]}..."], # Slice to avoid context overflow for now
-        "history": [f"Scraped content from {url}"]
+        "scraped_pages": valid_pages,
+        "events": [f"Scrape: Extracted content from {len(valid_pages)} new pages."]
     }

@@ -15,12 +15,16 @@ async def event_generator(request: ResearchRequest) -> AsyncGenerator[str, None]
     graph = get_graph()
     initial_state = {
         "query": request.query,
-        "plan": [],
-        "context": [],
-        "insights": [],
-        "next_node": "orchestrator",
-        "history": [],
-        "is_complete": False
+        "sub_questions": [],
+        "research_plan": "",
+        "search_results": [],
+        "scraped_pages": [],
+        "findings": [],
+        "critique": None,
+        "iteration": 0,
+        "sources": [],
+        "events": [],
+        "report": None
     }
     
     # Configure the graph with the model settings in a side-channel/config
