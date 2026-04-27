@@ -1,14 +1,14 @@
 import os
 from typing import Optional, Type, Any
 from langchain_openai import ChatOpenAI
-from app.config import MODEL_NAME, MODEL_URL, MODEL_API_KEY, WANDB_ENABLED
+from app.config import MODEL_NAME, MODEL_URL, MODEL_API_KEY
 from langchain_core.output_parsers.pydantic import PydanticOutputParser
 
 
 class LLMWrapper:
     """Unified LLM wrapper that supports both plain text and structured (schema-based) outputs.
     
-    Automatically attaches WandB tracing callbacks if enabled.
+    All LLM calls are automatically traced by WandB Weave.
     
     Usage:
         llm = get_llm()
@@ -21,15 +21,6 @@ class LLMWrapper:
     """
     def __init__(self, llm: Any):
         self._llm = llm
-        
-        # Attach WandB tracing callback if enabled
-        if WANDB_ENABLED:
-            try:
-                from app.utils.callbacks import WandBTracingCallback
-                callback = WandBTracingCallback(trace_llm_calls=True)
-                self._llm.callbacks = [callback]
-            except ImportError:
-                pass  # WandB not available
 
     async def ainvoke(self, prompt: str, schema: Optional[Type[Any]] = None):
         """Invoke the LLM with an optional schema for structured output.
