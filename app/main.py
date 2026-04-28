@@ -1,5 +1,6 @@
 import json
 import asyncio
+import time
 from typing import AsyncGenerator, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
@@ -10,21 +11,35 @@ from app.engine import get_graph
 app = FastAPI(title="Deep Research Multi-Agent System")
 
 
-def serialize_for_json(obj: Any) -> Any:
-    """Convert Pydantic models and other non-JSON types to JSON-serializable format."""
-    if isinstance(obj, BaseModel):
-        return obj.model_dump()
-    elif isinstance(obj, dict):
-        return {k: serialize_for_json(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
-        return [serialize_for_json(item) for item in obj]
-    return obj
+def get_status_data(node_name: str, output: dict) -> dict:
+    """Extract minimal status data from each node's output."""
+    data = {}
+    
+    # Extract only the most relevant field per node
+    if node_name == "orchestrate":
+        data["sub_questions"] = len(output.get("sub_questions", []))
+    elif node_name == "search":
+        data["results_found"] = len(output.get("search_results", []))
+    elif node_name == "scrape":
+        data["pages_extracted"] = len(output.get("scraped_pages", []))
+    elif node_name == "synthesize":
+        data["findings"] = len(output.get("findings", []))
+    elif node_name == "critique":
+        critique = output.get("critique")
+        if critique:
+            data["satisfied"] = critique.satisfied
+            data["gaps"] = len(critique.gaps)
+    elif node_name == "write_report":
+        data["report_length"] = len(output.get("report", ""))
+    
+    return {"type": "status", "stage": node_name, "data": data}
 
 
 async def event_generator(request: ResearchRequest) -> AsyncGenerator[str, None]:
     """
-    Streams events from the LangGraph orchestrator via SSE.
-    Only streams high-level node completions (not token-by-token reasoning).
+    Streams research progress via SSE with two-tier events:
+    1. `status`: Lightweight progress updates per stage
+    2. `report`: Final research output at completion
     """
     graph = get_graph()
     initial_state = {
@@ -41,28 +56,51 @@ async def event_generator(request: ResearchRequest) -> AsyncGenerator[str, None]
         "report": None
     }
     
+    start_time = time.time()
+    final_state = None
+    
+    # Node names we care about for status updates
+    task_nodes = {"orchestrate", "search", "scrape", "synthesize", "critique", "write_report"}
+    
     try:
         # Using astream_events v2 for granular node/tool updates
         async for event in graph.astream_events(initial_state, version="v2"):
             kind = event["event"]
             
             if kind == "on_chain_end":
-                # Only emit events for top-level node completions
                 node_name = event.get("name", "Unknown")
                 output = event.get("data", {}).get("output", {})
                 
-                # Convert any Pydantic models in output to dicts
-                output = serialize_for_json(output)
+                # Only process actual task nodes, skip routing decisions
+                if node_name in task_nodes:
+                    # Extract status data and emit lightweight status event
+                    status_event = get_status_data(node_name, output)
+                    yield f"data: {json.dumps(status_event)}\n\n"
                 
-                data = {
-                    "event": "node_complete",
-                    "node": node_name,
-                    "data": output
+                # Keep track of final state for the report event
+                if node_name == "write_report":
+                    final_state = output
+
+        # After graph completes, emit final report event
+        if final_state:
+            duration = time.time() - start_time
+            iteration = final_state.get("iteration", 0)
+            
+            report_event = {
+                "type": "report",
+                "content": final_state.get("report", ""),
+                "sources": final_state.get("sources", []),
+                "metadata": {
+                    "query": request.query,
+                    "iterations": iteration,
+                    "duration_seconds": round(duration, 2)
                 }
-                yield f"data: {json.dumps(data)}\n\n"
+            }
+            yield f"data: {json.dumps(report_event)}\n\n"
 
     except Exception as e:
-        yield f"data: {json.dumps({'event': 'error', 'message': str(e)})}\n\n"
+        error_event = {"type": "error", "message": str(e)}
+        yield f"data: {json.dumps(error_event)}\n\n"
 
 @app.get("/health")
 async def health():
