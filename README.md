@@ -89,6 +89,6 @@ app/
 ├── config.py        # Environment variable loading
 └── main.py          # FastAPI application + SSE event streaming
 tests/
-├── unit/            # Structured I/O, rate limiter tests
-└── integration/     # API endpoint tests
+├── unit/            # Structured I/O, Agent Node tests
+└── integration/     # API endpoint tests, system dry run
 ```
