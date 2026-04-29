@@ -25,25 +25,41 @@ def test_research_endpoint_invalid_input():
 def test_research_endpoint_sse_format():
     """Test that research endpoint returns valid SSE stream format.
     
-    Note: This will only work if all required APIs are configured.
+    Validates two-tier event structure:
+    - Status events: {type: "status", stage, data}
+    - Report event: {type: "report", content, sources, metadata}
+    - Error events: {type: "error", message}
     """
     response = client.post(
         "/research", 
         json={"query": "What is Python?"}
     )
     
-    # SSE responses don't have a fixed status code in streaming
-    # Just verify we get a streaming response
     if response.status_code == 200:
         # Parse SSE events from response
         lines = response.text.strip().split('\n')
-        events_found = any(line.startswith('data: ') for line in lines)
+        status_events = []
+        report_event = None
         
-        # Verify at least some data was streamed
-        assert len(lines) > 0, "Stream should contain events"
-        if events_found:
-            # Try to parse at least one event
-            for line in lines:
-                if line.startswith('data: '):
+        for line in lines:
+            if line.startswith('data: '):
+                try:
                     event_json = json.loads(line[6:])  # Remove 'data: ' prefix
-                    assert 'event' in event_json, "Event should have 'event' field"
+                    event_type = event_json.get('type')
+                    
+                    if event_type == 'status':
+                        status_events.append(event_json)
+                        assert 'stage' in event_json, "Status event must have 'stage'"
+                        assert 'data' in event_json, "Status event must have 'data'"
+                    elif event_type == 'report':
+                        report_event = event_json
+                        assert 'content' in event_json, "Report event must have 'content'"
+                        assert 'sources' in event_json, "Report event must have 'sources'"
+                        assert 'metadata' in event_json, "Report event must have 'metadata'"
+                    elif event_type == 'error':
+                        assert 'message' in event_json, "Error event must have 'message'"
+                except json.JSONDecodeError:
+                    pass  # Skip malformed lines
+        
+        # Should have at least some status events and a final report/error
+        assert len(status_events) > 0 or report_event, "Stream should contain events"

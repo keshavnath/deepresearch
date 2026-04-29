@@ -18,7 +18,12 @@ class FakeResp:
 
 
 class FakeLLM:
+    """Fake LLM that tracks the prompt it receives."""
+    def __init__(self):
+        self.last_prompt = None
+    
     async def ainvoke(self, prompt: str):
+        self.last_prompt = prompt
         return FakeResp('{"name":"Alice","age":30,"sex":"female"}')  # minimal JSON
 
 
@@ -33,6 +38,23 @@ async def test_llm_person_parse_fake():
     assert result.name == "Alice"
     assert result.age == 30
     assert result.sex == "female"
+
+
+@pytest.mark.asyncio
+async def test_llm_format_instructions_injected():
+    """Test that format instructions from schema are actually injected into prompt."""
+    fake_llm = FakeLLM()
+    wrapped = LLMWrapper(fake_llm)
+    
+    _ = await wrapped.ainvoke("Generate a person", schema=Person)
+    
+    # Verify format instructions were prepended to prompt
+    assert fake_llm.last_prompt is not None
+    assert "name" in fake_llm.last_prompt, "Prompt should contain schema field 'name'"
+    assert "age" in fake_llm.last_prompt, "Prompt should contain schema field 'age'"
+    assert "sex" in fake_llm.last_prompt, "Prompt should contain schema field 'sex'"
+    # Original prompt should still be there
+    assert "Generate a person" in fake_llm.last_prompt
 
 
 @pytest.mark.asyncio

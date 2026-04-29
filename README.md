@@ -2,18 +2,18 @@
 
 A production-ready multi-agent system that autonomously researches queries by decomposing them, searching sources, scraping content, synthesizing findings, and iteratively validating quality.
 
-**Built with:** LangGraph (orchestration) | FastAPI (API) | WandB Weave (observability) | Pydantic v2 (structured I/O)
+**Built with:** Python (Asyncio) | uv (Environment) | LangGraph (Agents) | FastAPI (Backend) | Trafilatura (Web Scraping) | WandB Weave (Observability) | Pydantic (structured I/O)
 
 ## Architecture
 
 ```
 User Query → Orchestrator (decompose) → Searcher → Scraper → Synthesizer → Critic → Reporter
-                                           ↑__________________________________↓
-                                           (iterate if gaps found, max 2 loops)
+                                           ↑___________________________________↓
+                                           (iterate if gaps found, max N loops)
 ```
 
 - **Orchestrator**: Plans research by decomposing query into 3-5 sub-questions
-- **Searcher**: Parallel Tavily API calls with rate limiting (3 concurrent)
+- **Searcher**: Parallel Tavily API calls with rate limiting
 - **Scraper**: Trafilatura-based content extraction from top URLs
 - **Synthesizer**: LLM generates structured findings (question, answer, confidence, sources)
 - **Critic**: Validates sufficiency; triggers re-search if gaps exist
@@ -25,6 +25,9 @@ User Query → Orchestrator (decompose) → Searcher → Scraper → Synthesizer
 # Install
 uv sync
 
+# Populate environment variables
+cp .env.example .env
+
 # Run server
 uv run python -m uvicorn app.main:app
 
@@ -34,33 +37,31 @@ curl -N -X POST -H "Content-Type: application/json" \
   http://localhost:8000/research
 ```
 
-Returns **SSE stream** of real-time events (node completions, reasoning, traces).
+Returns **SSE stream** of real-time node completions.
 
-## Key Technical Decisions (Interview Talking Points)
+## Key Technical Decisions
 
-| Decision | Why |
+| Tech | Why |
 |----------|-----|
-| **LangGraph** over custom orchestration | StateGraph provides typed state management, conditional routing, automatic persistence for retries |
-| **SSE streaming** over polling | Real-time updates, single connection, natural fit for agentic workflows |
-| **Pydantic v2 schemas with Field descriptions** | Schema descriptions → LLM format instructions (no separate prompt engineering needed) |
-| **Rate limiting via asyncio.Semaphore** | Prevents API throttling; max 3 Tavily, 5 LLM concurrent calls |
-| **WandB Weave for observability** | Automatic LLM call tracing + decorator-based function instrumentation; captures all input/output/latency |
-| **Structured I/O parser** | All agent outputs validated against schema; LLM respects format instructions |
+| **`LangGraph`** over custom orchestration | `StateGraph` provides typed state management, conditional routing, automatic persistence for retries |
+| **`SSE` streaming** | Real-time updates, single connection, natural fit for agentic workflows |
+| **`Pydantic` schemas with Field descriptions** | All agent outputs validated against schema, LLM respects format instructions; Schema descriptions → LLM format instructions (less separate prompt engineering needed) |
+| **Parallelism limiting** | `asyncio.Semaphore` prevents API throttling; max 3 Tavily, 5 LLM concurrent calls |
+| **`WandB Weave` for observability** | Automatic LLM call tracing + decorator-based function instrumentation; captures all input/output/latency |
 
 ## Testing
 
 ```bash
+# All tests
+uv run pytest tests/ -v
+
 # Unit tests (structured I/O, rate limiting)
 uv run pytest tests/unit/ -v
 
 # Integration tests (API contract)
 uv run pytest tests/integration/ -v
 
-# With traces
-uv run pytest tests/ -v -s
 ```
-
-Tests initialize WandB Weave automatically (see traces in WandB dashboard).
 
 ## Project Structure
 

@@ -1,6 +1,7 @@
 import json
 import asyncio
 import time
+import logging
 from typing import AsyncGenerator, Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
@@ -8,6 +9,7 @@ from pydantic import BaseModel
 from app.schema import ResearchRequest
 from app.engine import get_graph
 
+logger = logging.getLogger(__name__)
 app = FastAPI(title="Deep Research Multi-Agent System")
 
 
@@ -40,6 +42,12 @@ async def event_generator(request: ResearchRequest) -> AsyncGenerator[str, None]
     Streams research progress via SSE with two-tier events:
     1. `status`: Lightweight progress updates per stage
     2. `report`: Final research output at completion
+    
+    Handles edge cases gracefully:
+    - Empty search results -> proceeds with limited context
+    - Failed scrapes -> uses available content
+    - No findings -> errors at report stage
+    - Agent errors -> caught and sent as error events
     """
     graph = get_graph()
     initial_state = {
@@ -63,6 +71,8 @@ async def event_generator(request: ResearchRequest) -> AsyncGenerator[str, None]
     task_nodes = {"orchestrate", "search", "scrape", "synthesize", "critique", "write_report"}
     
     try:
+        logger.info(f"Starting research for query: {request.query[:100]}")
+        
         # Using astream_events v2 for granular node/tool updates
         async for event in graph.astream_events(initial_state, version="v2"):
             kind = event["event"]
@@ -73,9 +83,12 @@ async def event_generator(request: ResearchRequest) -> AsyncGenerator[str, None]
                 
                 # Only process actual task nodes, skip routing decisions
                 if node_name in task_nodes:
-                    # Extract status data and emit lightweight status event
-                    status_event = get_status_data(node_name, output)
-                    yield f"data: {json.dumps(status_event)}\n\n"
+                    try:
+                        # Extract status data and emit lightweight status event
+                        status_event = get_status_data(node_name, output)
+                        yield f"data: {json.dumps(status_event)}\n\n"
+                    except Exception as e:
+                        logger.warning(f"Error extracting status for {node_name}: {e}")
                 
                 # Keep track of final state for the report event
                 if node_name == "write_report":
@@ -86,9 +99,13 @@ async def event_generator(request: ResearchRequest) -> AsyncGenerator[str, None]
             duration = time.time() - start_time
             iteration = final_state.get("iteration", 0)
             
+            report_content = final_state.get("report", "")
+            if not report_content:
+                logger.warning("Final state has no report content")
+            
             report_event = {
                 "type": "report",
-                "content": final_state.get("report", ""),
+                "content": report_content,
                 "sources": final_state.get("sources", []),
                 "metadata": {
                     "query": request.query,
@@ -97,9 +114,22 @@ async def event_generator(request: ResearchRequest) -> AsyncGenerator[str, None]
                 }
             }
             yield f"data: {json.dumps(report_event)}\n\n"
+            logger.info(f"Research completed in {duration:.2f}s after {iteration} iteration(s)")
+        else:
+            # Graph executed but no report state - shouldn't happen
+            logger.error("Graph completed but no final_state reached")
+            error_event = {"type": "error", "message": "Graph completed but no report was generated"}
+            yield f"data: {json.dumps(error_event)}\n\n"
 
+    except RuntimeError as e:
+        # Agents raise RuntimeError for edge cases (no findings, etc.)
+        logger.error(f"Research failed (agent error): {e}")
+        error_event = {"type": "error", "message": f"Research failed: {str(e)}"}
+        yield f"data: {json.dumps(error_event)}\n\n"
     except Exception as e:
-        error_event = {"type": "error", "message": str(e)}
+        # Catch all other exceptions
+        logger.exception(f"Unexpected error during research: {e}")
+        error_event = {"type": "error", "message": f"Unexpected error: {str(e)}"}
         yield f"data: {json.dumps(error_event)}\n\n"
 
 @app.get("/health")

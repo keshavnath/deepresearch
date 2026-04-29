@@ -58,3 +58,24 @@ async def test_critic_node_max_iterations():
     # Even if LLM says not satisfied, it shouldn't update sub_questions because iteration is at max
     assert "sub_questions" not in result
     assert result["iteration"] == MAX_ITERATIONS+1
+
+@pytest.mark.asyncio
+async def test_critic_node_no_findings_raises_error():
+    """Test that critic raises RuntimeError when given no findings (edge case)."""
+    state: ResearchState = {
+        "query": "test query",
+        "findings": [],  # Empty findings - should trigger error
+        "iteration": 0,
+        "events": [],
+        "sub_questions": ["q1"],
+        "research_plan": "plan",
+        "search_results": [],
+        "scraped_pages": [],
+        "critique": None,
+        "sources": [],
+        "report": None
+    }
+    
+    # Should raise RuntimeError as per edge case handling
+    with pytest.raises(RuntimeError, match="Cannot critique.*no findings"):
+        await critic_node(state)
