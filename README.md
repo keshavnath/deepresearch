@@ -4,6 +4,19 @@ A production-ready multi-agent system that autonomously researches queries by de
 
 **Built with:** Python (Asyncio) | uv (Environment) | LangGraph (Agents) | FastAPI (Backend) | Trafilatura (Web Scraping) | WandB Weave (Observability) | Pydantic (structured I/O)
 
+## Overview
+
+This system autonomously executes deep research workflows on any query. Given a user question, it systematically:
+1. Decomposes the query into researchable sub-questions
+2. Searches the web for relevant sources
+3. Extracts content from top results
+4. Synthesizes structured findings with confidence scores
+5. Validates research quality; if gaps exist, loops back to search with refined questions (max N iterations)
+6. Reports findings as a formatted markdown document with citations
+7. Logs every trace including input, decision, output and system state for observability
+
+Use it for: competitive analysis, technical due diligence, market research, literature reviews, fact-checking, or any task requiring comprehensive web-based research with iterative validation.
+
 ## Architecture
 
 ```
@@ -11,6 +24,8 @@ User Query → Orchestrator (decompose) → Searcher → Scraper → Synthesizer
                                            ↑___________________________________↓
                                            (iterate if gaps found, max N loops)
 ```
+
+### Langgraph Nodes
 
 - **Orchestrator**: Plans research by decomposing query into 3-5 sub-questions
 - **Searcher**: Parallel Tavily API calls with rate limiting
