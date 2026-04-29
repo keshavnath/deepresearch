@@ -2,7 +2,7 @@
 
 A production-ready multi-agent system that autonomously researches queries by decomposing them, searching sources, scraping content, synthesizing findings, and iteratively validating quality.
 
-**Built with:** Python (Asyncio) | uv (Environment) | LangGraph (Agents) | FastAPI (Backend) | Trafilatura (Web Scraping) | WandB Weave (Observability) | Pydantic (structured I/O)
+**Built with:** Python (Asyncio) | uv (Environment) | LangGraph (Agents) | FastAPI (Backend) | Trafilatura (Web Scraping) | WandB Weave (Observability) | Pydantic (structured I/O) | BM25 (Keyword Retrieval)
 
 ## Overview
 
@@ -17,6 +17,11 @@ This system autonomously executes deep research workflows on any query. Given a 
 
 Use it for: competitive analysis, technical due diligence, market research, literature reviews, fact-checking, or any task requiring comprehensive web-based research with iterative validation.
 
+## Report Sample
+Report sample of PSG vs Bayern Munich (from just 12 hours before time of writing!)
+
+![WanDB Trace of Report](./img/report_sample.png)
+
 ## Architecture
 
 ```
@@ -30,7 +35,7 @@ User Query → Orchestrator (decompose) → Searcher → Scraper → Synthesizer
 - **Orchestrator**: Plans research by decomposing query into 3-5 sub-questions
 - **Searcher**: Parallel Tavily API calls with rate limiting
 - **Scraper**: Trafilatura-based content extraction from top URLs
-- **Synthesizer**: LLM generates structured findings (question, answer, confidence, sources)
+- **Synthesizer**: Uses BM25 keyword retrieval to find relevant passages, then LLM generates structured findings (question, answer, confidence, sources)
 - **Critic**: Validates sufficiency; triggers re-search if gaps exist
 - **Reporter**: Generates final markdown report with citations
 
@@ -63,6 +68,7 @@ Returns **SSE stream** of real-time node completions.
 | **`Pydantic` schemas with Field descriptions** | All agent outputs validated against schema, LLM respects format instructions; Schema descriptions → LLM format instructions (less separate prompt engineering needed) |
 | **Parallelism limiting** | `asyncio.Semaphore` prevents API throttling; max 3 Tavily, 5 LLM concurrent calls |
 | **`WandB Weave` for observability** | Automatic LLM call tracing + decorator-based function instrumentation; captures all input/output/latency |
+| **`BM25` for passage retrieval** | Keyword-based ranking (no embeddings) finds relevant passages per question; faster, no API calls, high lexical recall |
 
 ## Testing
 
@@ -83,12 +89,22 @@ uv run pytest tests/integration/ -v
 ```
 app/
 ├── agents/          # Orchestrator, Searcher, Scraper, Synthesizer, Critic, Reporter
-├── utils/           # LLM wrapper, rate limiting, WandB Weave integration
+├── utils/           # LLM wrapper, rate limiting, WandB Weave integration, BM25 retrieval
 ├── schema.py        # Pydantic models + ResearchState (TypedDict)
 ├── engine.py        # LangGraph state machine compilation
 ├── config.py        # Environment variable loading
 └── main.py          # FastAPI application + SSE event streaming
 tests/
-├── unit/            # Structured I/O, Agent Node tests
+├── unit/            # Structured I/O, Agent Node tests, BM25 retrieval tests
 └── integration/     # API endpoint tests, system dry run
 ```
+
+## Weights & Biases (WandB Weave) Observability
+
+Project uses WandB Weave for Observability and Logging
+
+Sample of Weave metrics on project Dashboard
+![Weave Metrics Dashboard](./img/weave_metrics.png)
+
+Sample of Weave Trace with agent state and I/O
+![Weave Trace](./img/weave_trace.png)

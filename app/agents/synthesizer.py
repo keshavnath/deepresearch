@@ -3,6 +3,7 @@ import logging
 from app.schema import ResearchState, Finding
 from app.utils.llm import get_llm
 from app.utils.tracer import weave_op
+from app.utils.rag import BM25PassageIndex
 
 logger = logging.getLogger(__name__)
 
@@ -18,12 +19,12 @@ Respond with a clear answer, a confidence score (0-1), and the source URLs used.
 """
 
 @weave_op("synthesize_one")
-async def synthesize_one(question: str, context: str, fallback_url: str = "") -> Finding:
-    """Generate a finding from a question and research context.
+async def synthesize_one(question: str, passage_index: BM25PassageIndex = None, fallback_url: str = "") -> Finding:
+    """Generate a finding from a question using BM25-retrieved context.
     
     Args:
         question: Research question to answer
-        context: Research context (may be empty)
+        passage_index: BM25PassageIndex for retrieving relevant passages (optional)
         fallback_url: URL to use if LLM finds no sources (optional)
         
     Returns:
@@ -32,7 +33,12 @@ async def synthesize_one(question: str, context: str, fallback_url: str = "") ->
     Raises:
         Exception: If LLM call fails
     """
-    # Edge case: Empty context
+    # Retrieve relevant passages for this specific question
+    context = ""
+    if passage_index:
+        context = passage_index.retrieve_for_query(question, top_k=5)
+    
+    # Edge case: No relevant context found
     if not context or not context.strip():
         logger.warning(f"Synthesizing with empty context for: {question}")
         context = "(No research context available)"
@@ -60,10 +66,10 @@ async def synthesize_one(question: str, context: str, fallback_url: str = "") ->
 
 @weave_op("synthesizer")
 async def synthesizer_node(state: ResearchState) -> dict:
-    """Synthesize findings from scraped content.
+    """Synthesize findings from scraped content using BM25-based retrieval.
     
-    For each sub-question, generates a structured finding with answer,
-    confidence score, and supporting sources.
+    For each sub-question, retrieves relevant passages via BM25 and generates
+    a structured finding with answer, confidence score, and supporting sources.
     
     Args:
         state: ResearchState with scraped_pages and sub_questions
@@ -82,29 +88,25 @@ async def synthesizer_node(state: ResearchState) -> dict:
         }
     
     scraped_pages = state.get("scraped_pages", [])
+    passage_index = None
     
-    # Edge case: No scraped content
-    if not scraped_pages:
-        logger.warning("No scraped content available for synthesis")
-        context = "(No research context - no pages were successfully scraped)"
+    # Try to build BM25 index; if it fails, we'll fall back to None
+    if scraped_pages:
+        try:
+            passage_index = BM25PassageIndex(scraped_pages)
+            logger.info(f"BM25 index created for {len(scraped_pages)} pages")
+        except Exception as e:
+            logger.warning(f"Failed to build BM25 index, falling back to direct context: {e}")
+            passage_index = None
     else:
-        # Truncate and format context to fit window
-        context_parts = []
-        for page in scraped_pages:
-            context_parts.append(f"Source: {page.url}\nContent: {page.content[:3000]}")
-        
-        context = "\n---\n".join(context_parts)[:20000]  # Hard limit
-        
-        if not context.strip():
-            logger.warning("Context truncated to empty string")
-            context = "(Research context too large to process)"
+        logger.warning("No scraped content available for synthesis")
     
     # Get first URL as fallback if synthesis has no sources
     fallback_url = scraped_pages[0].url if scraped_pages else ""
     
     try:
         tasks = [
-            synthesize_one(question=q, context=context, fallback_url=fallback_url)
+            synthesize_one(question=q, passage_index=passage_index, fallback_url=fallback_url)
             for q in state["sub_questions"]
         ]
         findings = await asyncio.gather(*tasks, return_exceptions=True)
